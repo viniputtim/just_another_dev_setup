@@ -1,65 +1,73 @@
-FILE_PATH = '/home/vinicius/Documentos/raylib_cheatsheet.txt'
+import os
+import re
 
 
-def read_lines():
+CHEATSHEET_PATH = '/home/vinicius/Documentos/raylib_cheatsheet.txt'
+FUNCTION_REGEX = re.compile(r'^[\w\s]+?([\w\*]+)\(([\w\s\*,]+)\);\s+\/\/\s+(.*)$')
+
+
+def read_cheatsheet():
     lines = ''
 
-    with open(FILE_PATH) as file:
+    with open(CHEATSHEET_PATH) as file:
         lines = file.readlines()
 
     return lines
 
 
+def process_lines(lines):
+    functions = []
+
+
+    for line in lines:
+        f, a, c = process_line(line.strip())
+
+        if f and a and c:
+            functions.append([f, a, c])
+
+    return functions
+
+
 def process_line(line):
+    match = re.search(FUNCTION_REGEX, line)
+    function = [match.group(1), match.group(2), match.group(3)] if match else [0, 0, 0]
+
+    return function
+
+
+def process_functions(functions):
     content = ''
 
-    if '/' in line:
-        index = line.index('/')
-        line = line[:index]
-        line = line.strip()
-
-    if ';' in line and '(' in line and ')' in line and not '#' in line:
-        line = line.replace(';', '')
-
-        if ' ' in line:
-            index = line.index(' ')
-            line = line[index + 1:]
-
-        content = line
+    for function in functions:
+        c = process_function(function)
+        content = f'{content}{c}\n' if c else content
 
     return content
 
 
 def process_function(function):
-    content = ''
-    arguments = ''
-    name = ''
+    function[0] = remove_star(function[0])
+    args = process_args(function[1])
 
-    function = function.replace(' *', ' %')
-    function = function.replace('*', '')
-    function = function.replace(' %', ' *')
+    trigger = f'"trigger": "{function[0]}"'
+    annotation = f'"annotation": "{function[2]}"'
+    annotation = annotation.replace('\\0', '\\\\0')
+    contents = f'"contents": "{function[0]}({args})"'
 
-    if '(' in function and ')' in function:
-        start_index = function.index('(')
-        end_index = function.index(')')
-        args = function[start_index + 1:end_index]
-        name = function[:start_index]
-
-        arguments = process_args(args)
-
-    open_bracket = f'{" " * 8}{{\n'
-    trigger = f'{" " * 12}"trigger": "{function};",\n'
-    contents = f'{" " * 12}"contents": "{name}({arguments});"\n'
-    close_bracket = f'{" " * 8}}}'
-    content = f'{open_bracket}{trigger}{contents}{close_bracket}'
+    content = f'{{\n{" " * 4}{trigger},\n{" " * 4}{annotation},\n{" " * 4}{contents}\n}},'
 
     return content
 
 
-def process_args(args):
-    if args == 'void':
-        return ''
+def remove_star(name):
+    name = name.replace(' *', ' [replaced]')
+    name = name.replace('*', '')
+    name = name.replace(' [replaced]', ' *')
 
+    return name
+
+
+def process_args(args):
     arguments = []
     args = args.split(',')
 
@@ -67,31 +75,35 @@ def process_args(args):
         parts = arg.split(' ')
         arg = parts[-1]
 
-        arguments.append(f'${{{i + 1}:{arg}}}')
+        if arg != 'void':
+            arguments.append(f'${{{i + 1}:{arg}}}')
 
     args = ', '.join(arguments)
 
     return args
 
 
+def insert_body(content):
+    completions = []
+    opening_body = f'{{\n{" " * 4}"scope": "source.c, source.c++",\n{" " * 4}"completions": ['
+    ending_body = f'{" " * 4}]\n}}'
+    indentation = f'{" " * 8}'
+    lines = content.split('\n')
+
+    for line in lines[0:-1]:
+        completions.append(f'{indentation}{line}')
+
+    completions = '\n'.join(completions)
+    content = f'{opening_body}\n{completions}\n{ending_body}'
+
+    return content
+
+
 def main():
-    content = """{
-    "scope": "source.c, source.c++",
-    "completions": [\n"""
-    functions = ''
-    lines = read_lines()
-
-    for line in lines:
-        line_content = process_line(line)
-        functions = f'{functions}{line_content}\n' if line_content else functions
-
-    functions = functions.split('\n')
-
-    for function in functions:
-        line_content = process_function(function)
-        content = f'{content}{line_content},\n' if line_content else content
-
-    content += '    ]\n}'
+    cheatsheet_lines = read_cheatsheet()
+    functions = process_lines(cheatsheet_lines)
+    content = process_functions(functions)
+    content = insert_body(content)
 
     print(content)
 
