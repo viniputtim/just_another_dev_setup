@@ -15,6 +15,7 @@ int main()
         ClearBackground(RAYWHITE);
         DrawFPS(0, 0);
         EndDrawing();
+        InitWindow(width, height, *title)
     }
 
     CloseWindow();
